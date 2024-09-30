@@ -1,0 +1,146 @@
+#stage1
+#create a stock tracker that can accurately tell u whether it is bullish or bearish
+
+from datetime import date
+import pandas as pd
+import yfinance as yf
+from sklearn.linear_model import LinearRegression
+
+howmanyyears = int(input("How many years? > ")) # <-- Getting user input for years
+today = date.today()
+END_DATE = today.isoformat()
+START_DATE = date(today.year - howmanyyears, today.month, today.day).isoformat()
+
+whichstock = input("Which stock(input ticker)? > ") # <-- Getting user input for stock name
+data = yf.download(whichstock, start=START_DATE, end=END_DATE)
+
+data.reset_index(inplace=True)
+data['Date'] = pd.to_datetime(data.Date) # <-- Inserting the 'Date' Feature
+
+# Outputting the first 15 rows of data
+print(data.head(15))
+print(f"Data: {data.shape}")
+
+data['EMA-50'] = data['Close'].ewm(span=50, adjust=False).mean()
+data['EMA-200'] = data['Close'].ewm(span=200, adjust=False).mean()
+
+import matplotlib.pyplot as plt
+import numpy as np
+# High vs Low Graph
+plt.figure(figsize=(8, 4))
+plt.plot(data['Low'], label="Low", color="indianred")
+plt.plot(data['High'], label="High", color="mediumseagreen")
+plt.ylabel('Price (in USD)')
+plt.xlabel("Time")
+plt.title(f"High vs Low of {whichstock}")
+plt.tight_layout()
+plt.legend()
+plt.show()
+
+# Exponential Moving Average Graph
+#when the 50EMA crosses the 200EMA, it is bullish
+#Trend Shift: The crossing of the 50-day EMA above the 200-day EMA indicates a shift where short-term sentiment is becoming more positive than long-term sentiment.
+# This can suggest that recent buying strength is persisting and potentially leading to a longer-term upward trend.
+plt.figure(figsize=(8, 4))
+plt.plot(data['EMA-50'], label="EMA for 50 days")
+plt.plot(data['EMA-200'], label="EMA for 200 days")
+plt.plot(data['Adj Close'], label="Close")
+plt.title(f'Exponential Moving Average for {whichstock}')
+plt.ylabel('Price (in USD)')
+plt.xlabel("Time")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+#peterlynch chart
+#If the stock price is above the fair value line, it could indicate that the stock is overvalued.
+#If the stock price is below the fair value line, it may indicate that the stock is undervalued.
+# def plot_peter_lynch_chart(stock_ticker, pe_ratio=15):
+#     # Fetch historical stock data and earnings data
+#     stock_data = yf.Ticker(stock_ticker)
+#     stock_history = stock_data.history(period='10y')  # 10 years of stock data
+#     earnings = stock_data.earnings
+#
+#     # Calculate the Peter Lynch Fair Value Line (Price = P/E * EPS)
+#     eps = earnings['Earnings']  # EPS (Earnings Per Share)
+#     eps_years = earnings.index  # Earnings data year
+#
+#     # Create a DataFrame for the EPS values and P/E-based fair value
+#     eps_df = pd.DataFrame(eps, columns=['EPS'])
+#     eps_df['Year'] = eps_years
+#     eps_df.set_index('Year', inplace=True)
+#
+#     # Multiply EPS by the P/E ratio to calculate fair value price line
+#     eps_df['Fair_Value'] = eps_df['EPS'] * pe_ratio
+#
+#     # Filter the stock price data to the same years as EPS data
+#     stock_history['Year'] = stock_history.index.year
+#     price_by_year = stock_history.groupby('Year')['Close'].mean()
+#     price_by_year = price_by_year[price_by_year.index.isin(eps_years)]
+#
+#     # Plot the chart
+#     plt.figure(figsize=(10, 6))
+#     plt.plot(price_by_year.index, price_by_year.values, label=f'{stock_ticker} Price', color='blue')
+#     plt.plot(eps_df.index, eps_df['Fair_Value'], label=f'Fair Value (P/E={pe_ratio})', linestyle='--', color='green')
+#     plt.title(f'Peter Lynch Chart for {stock_ticker}')
+#     plt.xlabel('Year')
+#     plt.ylabel('Price')
+#     plt.legend()
+#     plt.grid(True)
+#     plt.show()
+#
+# # Example usage
+# plot_peter_lynch_chart('AAPL', pe_ratio=15)
+
+
+x = data[['Open', 'High', 'Low', 'Volume', 'EMA-50', 'EMA-200']]
+y = data['Close']
+
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.2)
+lr_model = LinearRegression()
+lr_model.fit(X_train, y_train)
+pred = lr_model.predict(X_test)
+d=pd.DataFrame({'Actual_Price': y_test, 'Predicted_Price': pred})
+print(d.head(10))
+print(d.describe())
+plt.scatter(y_test, pred, label='Predictions')
+plt.scatter(y_test, pred, label='Real Values')
+plt.xlabel('Actual Closing Price')
+plt.ylabel('Predicted Closing Price')
+plt.title('Predicted vs. Actual Closing Price')
+plt.legend()
+plt.show()
+
+import statsmodels.api as sm
+
+# Assuming you have the data in a pandas DataFrame:
+df = pd.DataFrame({'Actual': y_test, 'Predicted': pred})
+
+# Fit a linear regression model
+model = sm.OLS(df['Actual'], df['Predicted']).fit()
+
+# Get the R-squared value
+r_squared = model.rsquared
+print("R-squared:", r_squared)
+
+#prediction of the next week
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+# Load data, use from previous
+# Feature engineering (example: create moving averages)
+data['MA50'] = data['Close'].rolling(window=50).mean()
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(data.drop('Close', axis=1), data['Close'], test_size=0.2)
+
+# Create and train the model
+# lr_model = LinearRegression()
+# lr_model.fit(X_train, y_train)
+
+# Make predictions for the next week (assuming your data is daily)
+future_data = data.tail(7)  # Last 7 days
+predictions = lr_model.predict(future_data)
+print(predictions)
